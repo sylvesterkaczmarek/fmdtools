@@ -1,4 +1,4 @@
-name: Validate two scientific correctness fixes
+name: Validate scientific correctness fixes
 on:
   push:
     branches: [validation/nasa-correctness-20260924]
@@ -15,19 +15,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: 2
+          fetch-depth: 3
       - name: Install Graphviz and create isolated Python environment
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y graphviz
           python3 -m venv "$RUNNER_TEMP/fmd-validation"
           echo "$RUNNER_TEMP/fmd-validation/bin" >> "$GITHUB_PATH"
-      - name: Reproduce, test, build and publish isolated fixes
-        run: python validation/run.py
+      - name: Validate bootstrap compatibility and publish the tested branch
+        run: python validation/refine.py
       - name: Retain validation evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: nasa-correctness-validation
+          name: nasa-bootstrap-compatible-validation
           path: validation-results
           retention-days: 14
