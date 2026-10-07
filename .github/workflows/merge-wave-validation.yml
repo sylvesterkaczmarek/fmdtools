@@ -63,10 +63,11 @@ jobs:
           OPENBLAS_NUM_THREADS: '1'
         run: |
           set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src:$GITHUB_WORKSPACE/tests:$GITHUB_WORKSPACE/examples"
           mapfile -t tests < <(git diff --name-only "$BASE_SHA" -- tests | grep '\.py$')
           test "${#tests[@]}" -gt 0
           printf 'Regression file: %s\n' "${tests[@]}"
-          "$RUNNER_TEMP/test-env/bin/python" -m pytest -o addopts= --import-mode=importlib -q --junitxml="$RUNNER_TEMP/regressions.xml" "${tests[@]}"
+          "$RUNNER_TEMP/test-env/bin/python" -m pytest -o addopts= -q --junitxml="$RUNNER_TEMP/regressions.xml" "${tests[@]}"
           python3 - "$RUNNER_TEMP/regressions.xml" <<'PY'
           import sys, xml.etree.ElementTree as ET
           root = ET.parse(sys.argv[1]).getroot()
