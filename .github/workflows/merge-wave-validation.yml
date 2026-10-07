@@ -44,6 +44,12 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Clone-local override prevents historical JSON data being rewritten by LFS.
+          # It does not change tracked attributes, source files or test behavior.
+          attributes=$(git rev-parse --git-path info/attributes)
+          mkdir -p "$(dirname "$attributes")"
+          printf '* -filter\n' > "$attributes"
+          git update-index --refresh
           git -c core.hooksPath=/dev/null merge --no-commit --no-ff "$BASE_SHA"
           git diff --cached --check
           git diff --check
@@ -67,7 +73,7 @@ jobs:
           mapfile -t tests < <(git diff --name-only "$BASE_SHA" -- tests | grep '\.py$')
           test "${#tests[@]}" -gt 0
           printf 'Regression file: %s\n' "${tests[@]}"
-          "$RUNNER_TEMP/test-env/bin/python" -m pytest -o addopts= -q --junitxml="$RUNNER_TEMP/regressions.xml" "${tests[@]}"
+          "$RUNNER_TEMP/test-env/bin/python" -m pytest --testtype=custom -o addopts= -q --junitxml="$RUNNER_TEMP/regressions.xml" "${tests[@]}"
           python3 - "$RUNNER_TEMP/regressions.xml" <<'PY'
           import sys, xml.etree.ElementTree as ET
           root = ET.parse(sys.argv[1]).getroot()
@@ -102,6 +108,10 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          attributes=$(git rev-parse --git-path info/attributes)
+          mkdir -p "$(dirname "$attributes")"
+          printf '* -filter\n' > "$attributes"
+          git update-index --refresh
           git -c core.hooksPath=/dev/null merge --no-commit --no-ff "$BASE_SHA"
           git diff --cached --check
           git -c core.hooksPath=/dev/null commit -m 'Merge pinned upstream dev after focused regression validation'
