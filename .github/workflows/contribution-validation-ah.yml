@@ -31,9 +31,5 @@ jobs:
           MPLBACKEND: Agg
           PYTHONUNBUFFERED: '1'
         run: |
-          if test -f .contribution-validation/validate_ah.py; then
-            python .contribution-validation/validate_ah.py
-          else
-            python --version
-            echo 'Validation runner is ready.'
-          fi
+          python -m pip install ipython deap pymoo scikit-learn multiprocess pathos adjustText
+          python .contribution-validation/validate_ah.py
