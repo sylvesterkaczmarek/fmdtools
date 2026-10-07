@@ -1,0 +1,39 @@
+name: FMDTools risk contribution validation
+on:
+  push:
+    branches: [validation/fmdtools-risk-20261007-ah]
+permissions:
+  contents: write
+concurrency:
+  group: fmdtools-risk-validation-ah
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          sparse-checkout: |
+            src
+            tests
+            examples/pump
+            examples/tank
+            examples/multirotor_drone
+            docs-source
+            .contribution-validation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate prepared changes
+        env:
+          MPLBACKEND: Agg
+          PYTHONUNBUFFERED: '1'
+        run: |
+          if test -f .contribution-validation/validate_ah.py; then
+            python .contribution-validation/validate_ah.py
+          else
+            python --version
+            echo 'Validation runner is ready.'
+          fi
