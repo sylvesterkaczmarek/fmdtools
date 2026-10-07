@@ -1,0 +1,118 @@
+name: Pinned maintenance regression validation
+on:
+  push:
+    branches: [validation/merge-wave-20261007]
+    paths: [.github/workflows/merge-wave-validation.yml]
+permissions:
+  contents: read
+env:
+  BASE_SHA: 0aa579a6c77ef61e230512c7116e87b5b1186d8f
+jobs:
+  verify:
+    name: PR ${{ matrix.pr }} regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - {pr: 281, head: cf27a7fa8ceed3eccb3c27603f2537da28beb8e3}
+          - {pr: 283, head: 5c4dd462fdbdbfa0f9dd7d659d4e2e7f1cb23050}
+          - {pr: 285, head: 93624e54471ca60484e609e5d2f9616c8d701735}
+          - {pr: 287, head: 4d566303507165a829d4ac4f3e7a7d47c82aa202}
+          - {pr: 289, head: a216ca78374eb003b0c7c90348030fa75b0f7979}
+          - {pr: 299, head: e4cad6e83ebf5d4bbffa1c426497423dfe39ae2f}
+          - {pr: 301, head: 2d26a545e6badc3b52dd3724caee489209b657f7}
+          - {pr: 303, head: 6635ed12c22896075633b7df4bb5ddeb6c35a316}
+          - {pr: 305, head: 7b53f096e06e351ace3671cff0e62e5ea93614f2}
+          - {pr: 307, head: 4b2fb1619f3d08255a6a985ab3b700c217dbb0c1}
+          - {pr: 309, head: b5486ed981f1ce5a0a6783fa3c85b31d2131a4be}
+          - {pr: 311, head: 21119e4032d9702c54000864d6412e823eef183c}
+          - {pr: 313, head: 9977ad3422df3cc38c47be214088bb7006ffe0e7}
+          - {pr: 315, head: 9fd7a82a7606b1b87dcdb5f6a62159564a24e0ff}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ matrix.head }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Construct the candidate on the pinned upstream base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -c core.hooksPath=/dev/null merge --no-commit --no-ff "$BASE_SHA"
+          git diff --cached --check
+          git diff --check
+          git write-tree
+      - name: Install the project and test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 --version
+          python3 -m venv "$RUNNER_TEMP/test-env"
+          "$RUNNER_TEMP/test-env/bin/python" -m pip install --disable-pip-version-check '.[all]' pytest-cov
+      - name: Run the affected regression files
+        shell: bash
+        env:
+          MPLBACKEND: Agg
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+        run: |
+          set -euo pipefail
+          mapfile -t tests < <(git diff --name-only "$BASE_SHA" -- tests | grep '\.py$')
+          test "${#tests[@]}" -gt 0
+          printf 'Regression file: %s\n' "${tests[@]}"
+          "$RUNNER_TEMP/test-env/bin/python" -m pytest -o addopts= --import-mode=importlib -q --junitxml="$RUNNER_TEMP/regressions.xml" "${tests[@]}"
+          python3 - "$RUNNER_TEMP/regressions.xml" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          root = ET.parse(sys.argv[1]).getroot()
+          for suite in root.iter('testsuite'):
+              print('REGRESSION_SUMMARY', suite.attrib)
+          PY
+  publish_validated_candidates:
+    name: Preserve validated candidate for PR ${{ matrix.pr }}
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    strategy:
+      max-parallel: 2
+      matrix:
+        include:
+          - {pr: 281, head: cf27a7fa8ceed3eccb3c27603f2537da28beb8e3}
+          - {pr: 283, head: 5c4dd462fdbdbfa0f9dd7d659d4e2e7f1cb23050}
+          - {pr: 285, head: 93624e54471ca60484e609e5d2f9616c8d701735}
+          - {pr: 287, head: 4d566303507165a829d4ac4f3e7a7d47c82aa202}
+          - {pr: 289, head: a216ca78374eb003b0c7c90348030fa75b0f7979}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ matrix.head }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reconstruct the already-tested source without executing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -c core.hooksPath=/dev/null merge --no-commit --no-ff "$BASE_SHA"
+          git diff --cached --check
+          git -c core.hooksPath=/dev/null commit -m 'Merge pinned upstream dev after focused regression validation'
+          git rev-parse HEAD
+      - name: Publish only a new candidate branch for inspection
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ matrix.pr }}
+        run: |
+          set -euo pipefail
+          candidate="validation/merge-wave-20261007-pr-${PR_NUMBER}"
+          gh auth setup-git
+          test -z "$(git ls-remote --heads origin "$candidate")"
+          git push origin "HEAD:refs/heads/$candidate"
+          echo "VALIDATED_CANDIDATE $candidate $(git rev-parse HEAD)"
