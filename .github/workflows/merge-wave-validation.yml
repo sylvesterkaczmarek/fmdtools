@@ -7,6 +7,7 @@ permissions:
   contents: read
 env:
   BASE_SHA: 0aa579a6c77ef61e230512c7116e87b5b1186d8f
+  GIT_LFS_SKIP_SMUDGE: '1'
 jobs:
   verify:
     name: PR ${{ matrix.pr }} regression
@@ -53,7 +54,7 @@ jobs:
           set -euo pipefail
           python3 --version
           python3 -m venv "$RUNNER_TEMP/test-env"
-          "$RUNNER_TEMP/test-env/bin/python" -m pip install --disable-pip-version-check '.[all]' pytest-cov
+          "$RUNNER_TEMP/test-env/bin/python" -m pip install --quiet --disable-pip-version-check '.[all]' pytest-cov ipython
       - name: Run the affected regression files
         shell: bash
         env:
